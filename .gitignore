@@ -1,0 +1,40 @@
+# Objetos compilados
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.asm
+
+# Build
+build/
+dist/
+*.elf
+*.hex
+*.bin
+
+# Arduino/PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+*.pyc
+__pycache__/
+
+# Logs
+*.log
+*.log.*
+
+# Temporal
+*.tmp
+test_output.txt
