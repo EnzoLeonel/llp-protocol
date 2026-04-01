@@ -9,7 +9,7 @@
 #define LLP_MAGIC_2 0x55
 
 #define LLP_HEADER_SIZE 7           // Magic(2) + Type(1) + ID(2) + Len(2)
-#define LLP_MAX_PAYLOAD 512         // Ajustable según RAM disponible. Bajar a 64/128 para AVR (Arduino Uno/Nano)
+#define LLP_MAX_PAYLOAD 128         // Ajustable según RAM disponible. Bajar a 64/128 para AVR (Arduino Uno/Nano)
 #define LLP_FRAME_TIMEOUT_MS 2000   // Timeout para sincronismo
 
 // ================= MESSAGE TYPES =================

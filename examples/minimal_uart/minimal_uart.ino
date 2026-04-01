@@ -7,6 +7,7 @@
  * - Procesar diferentes tipos de mensaje
  * 
  * Hardware: Arduino UNO + Serial Monitor
+ * NOTA: Ajustar LLP_MAX_PAYLOAD del protocolo según microcontrolador
  * Velocidad: 9600 baud
  */
 
@@ -14,7 +15,7 @@
 
 // ============= GLOBALS =============
 llp_parser_t parser;
-uint8_t tx_buffer[520];
+uint8_t tx_buffer[LLP_HEADER_SIZE + LLP_MAX_PAYLOAD + 2];
 
 static uint16_t next_cmd_id = 1;
 
@@ -24,11 +25,11 @@ void setup() {
   Serial.begin(9600);
   llp_parser_init(&parser);
   
-  Serial.println("\n=== LLP Protocol - Minimal UART Example ===");
-  Serial.println("Esperando frames...\n");
+  Serial.println(F("\n=== LLP Protocol - Minimal UART Example ==="));
+  Serial.println(F("Esperando frames...\n"));
   
   // Debug: enviar un PING cada 10s
-  Serial.println("Tip: Abre Serial Monitor (9600 baud) para enviar frames\n");
+  Serial.println(F("Tip: Abre Serial Monitor (9600 baud) para enviar frames\n"));
 }
 
 // ============= MAIN LOOP =============
@@ -66,22 +67,22 @@ void loop() {
 // ============= FRAME HANDLERS =============
 
 void handleReceivedFrame(llp_frame_t *frame) {
-  Serial.print("[RX] Type: 0x");
+  Serial.print(F("[RX] Type: 0x"));
   Serial.print(frame->type, HEX);
-  Serial.print(" | ID: ");
+  Serial.print(F(" | ID: "));
   Serial.print(frame->id);
-  Serial.print(" | Len: ");
+  Serial.print(F(" | Len: "));
   Serial.print(frame->payload_len);
-  Serial.print(" | Data: ");
+  Serial.print(F(" | Data: "));
 
   // Mostrar payload
   for (uint16_t i = 0; i < frame->payload_len; i++) {
     if (frame->payload[i] >= 0x20 && frame->payload[i] < 0x7F) {
       Serial.write(frame->payload[i]);
     } else {
-      Serial.print("[0x");
+      Serial.print(F("[0x"));
       Serial.print(frame->payload[i], HEX);
-      Serial.print("]");
+      Serial.print(F("]"));
     }
   }
   Serial.println();
@@ -89,37 +90,37 @@ void handleReceivedFrame(llp_frame_t *frame) {
   // Procesar según tipo
   switch (frame->type) {
     case LLP_PING:
-      Serial.println("  → Recibido PING, enviando ACK...");
+      Serial.println(F("  → Recibido PING, enviando ACK..."));
       sendAck(frame->id, LLP_ERR_OK);
       break;
 
     case LLP_DATA:
-      Serial.println("  → Recibido DATA");
+      Serial.println(F("  → Recibido DATA"));
       sendAck(frame->id, LLP_ERR_OK);
       break;
 
     case LLP_CONFIG:
-      Serial.println("  → Recibido CONFIG");
+      Serial.println(F("  → Recibido CONFIG"));
       sendAck(frame->id, LLP_ERR_OK);
       break;
 
     case LLP_COMMAND:
-      Serial.println("  → Recibido COMMAND");
+      Serial.println(F("  → Recibido COMMAND"));
       handleCommand(frame);
       break;
 
     case LLP_ACK:
-      Serial.println("  → Recibido ACK");
+      Serial.println(F("  → Recibido ACK"));
       break;
 
     case LLP_NACK:
-      Serial.println("  → Recibido NACK (error)");
+      Serial.println(F("  → Recibido NACK (error)"));
       break;
 
     default:
-      Serial.print("  → Tipo desconocido (0x");
+      Serial.print(F("  → Tipo desconocido (0x"));
       Serial.print(frame->type, HEX);
-      Serial.println(")");
+      Serial.println(F(")"));
       break;
   }
 }
@@ -128,7 +129,7 @@ void handleCommand(llp_frame_t *frame) {
   // Ejemplo: si el payload es "LED_ON", activar LED
   if (frame->payload_len == 6 && 
       strncmp((char*)frame->payload, "LED_ON", 6) == 0) {
-    Serial.println("    → Comando: LED_ON (dummy, no hay LED físico)");
+    Serial.println(F("    → Comando: LED_ON (dummy, no hay LED físico)"));
     digitalWrite(LED_BUILTIN, HIGH);
     delay(100);
     digitalWrite(LED_BUILTIN, LOW);
@@ -145,14 +146,14 @@ void sendPing() {
     NULL, 0
   );
 
-  Serial.print("[TX] Enviando PING (ID ");
+  Serial.print(F("[TX] Enviando PING (ID "));
   Serial.print(next_cmd_id - 1);
-  Serial.println(")...");
+  Serial.println(F(")..."));
   
   if (len > 0) {
     Serial.write(tx_buffer, len);
   } else {
-    Serial.println("[ERROR] Failed to build frame");
+    Serial.println(F("[ERROR] Failed to build frame"));
   }
 }
 
@@ -165,16 +166,16 @@ void sendAck(uint16_t id, uint8_t ack_code) {
     payload, 1
   );
 
-  Serial.print("[TX] Enviando ACK (ID ");
+  Serial.print(F("[TX] Enviando ACK (ID "));
   Serial.print(id);
-  Serial.print(", code: 0x");
+  Serial.print(F(", code: 0x"));
   Serial.print(ack_code, HEX);
-  Serial.println(")");
+  Serial.println(F(")"));
   
   if (len > 0) {
     Serial.write(tx_buffer, len);
   } else {
-    Serial.println("[ERROR] Failed to build frame");
+    Serial.println(F("[ERROR] Failed to build frame"));
   }
 }
 
@@ -186,41 +187,41 @@ void sendData(const uint8_t *data, uint16_t len) {
     data, len
   );
 
-  Serial.print("[TX] Enviando DATA (ID ");
+  Serial.print(F("[TX] Enviando DATA (ID "));
   Serial.print(next_cmd_id - 1);
-  Serial.print(", ");
+  Serial.print(F(", "));
   Serial.print(len);
-  Serial.println(" bytes)");
+  Serial.println(F(" bytes)"));
   
   if (len > 0) {
     Serial.write(tx_buffer, len);
   } else {
-    Serial.println("[ERROR] Failed to build frame");
+    Serial.println(F("[ERROR] Failed to build frame"));
   }
 }
 
 // ============= UTILITIES =============
 
 void printError(uint8_t error_code) {
-  Serial.print("[ERROR] 0x");
+  Serial.print(F("[ERROR] 0x"));
   Serial.print(error_code, HEX);
   Serial.print(" - ");
 
   switch (error_code) {
     case LLP_ERR_CHECKSUM:
-      Serial.println("CRC Inválido");
+      Serial.println(F("CRC Inválido"));
       break;
     case LLP_ERR_TIMEOUT:
-      Serial.println("Timeout (frame incompleto)");
+      Serial.println(F("Timeout (frame incompleto)"));
       break;
     case LLP_ERR_PAYLOAD_LEN:
-      Serial.println("Payload demasiado largo");
+      Serial.println(F("Payload demasiado largo"));
       break;
     case LLP_ERR_SYNC:
-      Serial.println("Problema de sincronismo");
+      Serial.println(F("Problema de sincronismo"));
       break;
     default:
-      Serial.println("Desconocido");
+      Serial.println(F("Desconocido"));
       break;
   }
 }
@@ -229,12 +230,12 @@ void printStats() {
   uint32_t ok, err, timeout;
   llp_get_stats(&parser, &ok, &err, &timeout);
 
-  Serial.println("\n--- ESTADÍSTICAS ---");
-  Serial.print("Frames OK: ");
+  Serial.println(F("\n--- ESTADÍSTICAS ---"));
+  Serial.print(F("Frames OK: "));
   Serial.println(ok);
-  Serial.print("Frames Error: ");
+  Serial.print(F("Frames Error: "));
   Serial.println(err);
-  Serial.print("Timeouts: ");
+  Serial.print(F("Timeouts: "));
   Serial.println(timeout);
-  Serial.println("---\n");
+  Serial.println(F("---\n"));
 }
