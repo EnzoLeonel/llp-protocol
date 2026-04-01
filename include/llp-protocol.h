@@ -67,20 +67,21 @@ typedef struct {
 } llp_frame_t;
 
 // ================= PARSER =================
+typedef enum {
+  LLP_STATE_WAIT_MAGIC1,
+  LLP_STATE_WAIT_MAGIC2,
+  LLP_STATE_READ_TYPE,
+  LLP_STATE_READ_ID_L,
+  LLP_STATE_READ_ID_H,
+  LLP_STATE_READ_LEN_L,
+  LLP_STATE_READ_LEN_H,
+  LLP_STATE_READ_PAYLOAD,
+  LLP_STATE_READ_CRC_L,
+  LLP_STATE_READ_CRC_H
+} llp_parser_state_t;
+
 typedef struct {
-  // Estado interno
-  enum {
-    LLP_STATE_WAIT_MAGIC1,
-    LLP_STATE_WAIT_MAGIC2,
-    LLP_STATE_READ_TYPE,
-    LLP_STATE_READ_ID_L,
-    LLP_STATE_READ_ID_H,
-    LLP_STATE_READ_LEN_L,
-    LLP_STATE_READ_LEN_H,
-    LLP_STATE_READ_PAYLOAD,
-    LLP_STATE_READ_CRC_L,
-    LLP_STATE_READ_CRC_H
-  } state;
+  llp_parser_state_t state;
 
   uint8_t header_buf[LLP_HEADER_SIZE];
   
@@ -108,6 +109,8 @@ typedef struct {
  * Inicializa el parser
  */
 static inline void llp_parser_init(llp_parser_t* parser) {
+  parser->crc_calculated = 0xFFFF;
+  parser->last_byte_time = 0;
   parser->state = LLP_STATE_WAIT_MAGIC1;
   parser->payload_idx = 0;
   parser->error_code = LLP_ERR_OK;
@@ -328,3 +331,4 @@ static inline void llp_reset_stats(llp_parser_t* parser) {
 }
 
 #endif
+

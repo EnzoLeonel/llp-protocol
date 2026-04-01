@@ -10,7 +10,7 @@
  * Velocidad: 9600 baud
  */
 
-#include "llp_protocol.h"
+#include "llp-protocol.h"
 
 // ============= GLOBALS =============
 llp_parser_t parser;
@@ -20,6 +20,7 @@ static uint16_t next_cmd_id = 1;
 
 // ============= SETUP =============
 void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
   Serial.begin(9600);
   llp_parser_init(&parser);
   
@@ -147,8 +148,12 @@ void sendPing() {
   Serial.print("[TX] Enviando PING (ID ");
   Serial.print(next_cmd_id - 1);
   Serial.println(")...");
-
-  Serial.write(tx_buffer, len);
+  
+  if (len > 0) {
+    Serial.write(tx_buffer, len);
+  } else {
+    Serial.println("[ERROR] Failed to build frame");
+  }
 }
 
 void sendAck(uint16_t id, uint8_t ack_code) {
@@ -165,8 +170,12 @@ void sendAck(uint16_t id, uint8_t ack_code) {
   Serial.print(", code: 0x");
   Serial.print(ack_code, HEX);
   Serial.println(")");
-
-  Serial.write(tx_buffer, len);
+  
+  if (len > 0) {
+    Serial.write(tx_buffer, len);
+  } else {
+    Serial.println("[ERROR] Failed to build frame");
+  }
 }
 
 void sendData(const uint8_t *data, uint16_t len) {
@@ -182,8 +191,12 @@ void sendData(const uint8_t *data, uint16_t len) {
   Serial.print(", ");
   Serial.print(len);
   Serial.println(" bytes)");
-
-  Serial.write(tx_buffer, frame_len);
+  
+  if (len > 0) {
+    Serial.write(tx_buffer, len);
+  } else {
+    Serial.println("[ERROR] Failed to build frame");
+  }
 }
 
 // ============= UTILITIES =============
