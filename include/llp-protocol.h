@@ -7,8 +7,9 @@
 // ================= CONFIG =================
 #define LLP_MAGIC_1 0xAA
 #define LLP_MAGIC_2 0x55
+#define PROTOCOL_VERSION 0x02
 
-#define LLP_HEADER_SIZE 7           // Magic(2) + Type(1) + ID(2) + Len(2)
+#define LLP_HEADER_SIZE 8           // Magic(2) + Protocol Version(1) + Type(1) + ID(2) + Len(2)
 #define LLP_MAX_PAYLOAD 128         // Ajustable según RAM disponible. Bajar a 64/128 para AVR (Arduino Uno/Nano)
 #define LLP_FRAME_TIMEOUT_MS 2000   // Timeout para sincronismo
 
@@ -34,7 +35,8 @@ typedef enum {
   LLP_ERR_PAYLOAD_LEN = 0x03,
   LLP_ERR_TIMEOUT = 0x04,
   LLP_ERR_SYNC = 0x05,
-  LLP_ERR_BUFFER_FULL = 0x06
+  LLP_ERR_BUFFER_FULL = 0x06,
+  LLP_ERR_VERSION_MISMATCH = 0x07
 } llp_error_t;
 
 // ================= CRC16-CCITT =================
@@ -59,6 +61,7 @@ static inline uint16_t llp_crc16_buffer(const uint8_t* buf, size_t len) {
 
 // ================= FRAME STRUCTURE =================
 typedef struct {
+  uint8_t version;                   // Version del protocolo
   uint8_t type;                      // Tipo de mensaje
   uint16_t id;                       // ID de transacción (opcional)
   uint16_t payload_len;
@@ -70,6 +73,7 @@ typedef struct {
 typedef enum {
   LLP_STATE_WAIT_MAGIC1,
   LLP_STATE_WAIT_MAGIC2,
+  LLP_STATE_READ_VERSION,
   LLP_STATE_READ_TYPE,
   LLP_STATE_READ_ID_L,
   LLP_STATE_READ_ID_H,
@@ -152,7 +156,7 @@ static inline int llp_parser_process_byte(llp_parser_t* parser, uint8_t byte,
         parser->crc_calculated = 0xFFFF;
         parser->crc_calculated = llp_crc16_update(parser->crc_calculated, LLP_MAGIC_1);
         parser->crc_calculated = llp_crc16_update(parser->crc_calculated, LLP_MAGIC_2);
-        parser->state = LLP_STATE_READ_TYPE;
+        parser->state = LLP_STATE_READ_VERSION;
       } else if (byte == LLP_MAGIC_1) {
         // CORRECCIÓN RF: Si recibimos otro MAGIC_1, nos quedamos en MAGIC_2
         // porque podríamos estar en medio de ruido seguido del preámbulo real.
@@ -162,8 +166,16 @@ static inline int llp_parser_process_byte(llp_parser_t* parser, uint8_t byte,
       }
       break;
 
-    case LLP_STATE_READ_TYPE:
+    case LLP_STATE_READ_VERSION:
       parser->header_buf[2] = byte;
+      parser->crc_calculated = llp_crc16_update(parser->crc_calculated, byte);
+      
+      parser->frame.version = byte;
+      parser->state = LLP_STATE_READ_TYPE;
+      break;
+
+    case LLP_STATE_READ_TYPE:
+      parser->header_buf[3] = byte;
       parser->crc_calculated = llp_crc16_update(parser->crc_calculated, byte);
       
       // NOTA: Eliminamos la restricción de validación de tipo para permitir
@@ -173,28 +185,28 @@ static inline int llp_parser_process_byte(llp_parser_t* parser, uint8_t byte,
       break;
 
     case LLP_STATE_READ_ID_L:
-      parser->header_buf[3] = byte;
+      parser->header_buf[4] = byte;
       parser->crc_calculated = llp_crc16_update(parser->crc_calculated, byte);
       parser->state = LLP_STATE_READ_ID_H;
       break;
 
     case LLP_STATE_READ_ID_H:
-      parser->header_buf[4] = byte;
+      parser->header_buf[5] = byte;
       parser->crc_calculated = llp_crc16_update(parser->crc_calculated, byte);
       parser->frame.id = parser->header_buf[3] | (parser->header_buf[4] << 8);
       parser->state = LLP_STATE_READ_LEN_L;
       break;
 
     case LLP_STATE_READ_LEN_L:
-      parser->header_buf[5] = byte;
+      parser->header_buf[6] = byte;
       parser->crc_calculated = llp_crc16_update(parser->crc_calculated, byte);
       parser->state = LLP_STATE_READ_LEN_H;
       break;
 
     case LLP_STATE_READ_LEN_H:
-      parser->header_buf[6] = byte;
+      parser->header_buf[7] = byte;
       parser->crc_calculated = llp_crc16_update(parser->crc_calculated, byte);
-      parser->frame.payload_len = parser->header_buf[5] | (parser->header_buf[6] << 8);
+      parser->frame.payload_len = parser->header_buf[6] | (parser->header_buf[7] << 8);
       
       // Validar tamaño
       if (parser->frame.payload_len > LLP_MAX_PAYLOAD) {
@@ -279,6 +291,9 @@ static inline size_t llp_build_frame(
   // Magic
   out_buffer[idx++] = LLP_MAGIC_1;
   out_buffer[idx++] = LLP_MAGIC_2;
+
+  //Protocol Version
+  out_buffer[idx++] = PROTOCOL_VERSION;
 
   // Type
   out_buffer[idx++] = type;
