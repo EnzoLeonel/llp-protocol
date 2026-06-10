@@ -1,7 +1,7 @@
 /**
- * llp_protocol.h — LLP (Layered Link Protocol) v3.0.0
+ * llp_protocol.h — LLP (Layered Link Protocol) v3.1.0
  *
- * Single-header C implementation compatible with LLP Java library v3.0.0.
+ * Single-header C implementation compatible with LLP Java library.
  * Designed for Arduino IDE and any C99-compatible embedded environment.
  *
  * Wire format (transport frame):

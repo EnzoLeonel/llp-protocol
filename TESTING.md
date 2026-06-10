@@ -1,4 +1,4 @@
-# Testing Guide — LLP Protocol v3.0.0
+# Testing Guide — LLP Protocol 3.1.0
 
 ## Prerequisites
 
