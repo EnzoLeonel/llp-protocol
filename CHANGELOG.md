@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-06-10
+
+### Added
+- `llp_get_final_payload_ptr()` zero-copy API to read final payload without extra buffer
+- `LLP_ENABLE_STATS` compile-time flag to disable parser statistics (12 bytes RAM saving)
+
+### Changed
+- `llp_parser_state_t` changed from `enum` to `uint8_t` (saves 1–3 bytes RAM)
+- `llp_get_final_payload()` refactored to delegate to `llp_get_final_payload_ptr()`, eliminating duplicate layer-traversal logic
+- `last_byte_time` changed from `unsigned long` to `uint16_t` (saves 2 bytes RAM)
+- Fields reordered in `llp_parser_t` to minimize padding in 32-bit platforms (saves up to 4 bytes)
+- Parser statistics now disabled by default (`LLP_ENABLE_STATS=0`)
+
+### Removed
+- `crc` field from `llp_frame_t` (was written but never read, saves 2 bytes RAM)
+
+### Fixed
+- Timeout detection now uses correct `uint16_t` modular arithmetic for `last_byte_time`
+
 ## [3.0.0] - 2026-05-17
 
 ### Changed
@@ -59,4 +78,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Advanced retransmission patterns
 - Fragmentation support for large payloads
 - Hardware CRC acceleration (STM32, etc.)
-- Fix: timeout handling should update last_byte_time for correct subsequent behavior

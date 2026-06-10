@@ -55,6 +55,11 @@
 #define LLP_FRAME_TIMEOUT_MS  2000
 #endif
 
+/** Enable parser statistics (frames_ok, frames_error, timeouts). Disable to save 12 bytes of RAM. */
+#ifndef LLP_ENABLE_STATS
+#define LLP_ENABLE_STATS 0
+#endif
+
 /**
  * Worst-case output buffer size for llp_build_frame().
  * Every byte in LEN, PAYLOAD and CRC can be stuffed, doubling its cost.
@@ -112,7 +117,6 @@ static inline uint16_t llp_crc16_update(uint16_t crc, uint8_t data) {
 typedef struct {
     uint8_t  payload[LLP_MAX_PAYLOAD];
     uint16_t payload_len;
-    uint16_t crc;
 } llp_frame_t;
 
 typedef struct {
@@ -127,33 +131,33 @@ typedef struct {
 // PARSER STATE MACHINE
 // =============================================================================
 
-typedef enum {
-    LLP_STATE_WAIT_MAGIC1,
-    LLP_STATE_WAIT_MAGIC2,
-    LLP_STATE_READ_LEN_L,
-    LLP_STATE_READ_LEN_H,
-    LLP_STATE_READ_PAYLOAD,
-    LLP_STATE_READ_CRC_L,
-    LLP_STATE_READ_CRC_H
-} llp_parser_state_t;
+typedef uint8_t llp_parser_state_t;
+
+#define LLP_STATE_WAIT_MAGIC1   ((llp_parser_state_t)0)
+#define LLP_STATE_WAIT_MAGIC2   ((llp_parser_state_t)1)
+#define LLP_STATE_READ_LEN_L    ((llp_parser_state_t)2)
+#define LLP_STATE_READ_LEN_H    ((llp_parser_state_t)3)
+#define LLP_STATE_READ_PAYLOAD  ((llp_parser_state_t)4)
+#define LLP_STATE_READ_CRC_L    ((llp_parser_state_t)5)
+#define LLP_STATE_READ_CRC_H    ((llp_parser_state_t)6)
 
 typedef struct {
-    llp_parser_state_t state;
+#if LLP_ENABLE_STATS
+    uint32_t frames_ok;
+    uint32_t frames_error;
+    uint32_t timeouts;
+#endif
 
-    uint8_t  escape_pending;
+    llp_frame_t frame;
 
     uint16_t payload_idx;
     uint16_t crc_received;
     uint16_t crc_calculated;
+    uint16_t last_byte_time;
 
-    unsigned long last_byte_time;
-
-    llp_frame_t frame;
-    uint8_t     error_code;
-
-    uint32_t frames_ok;
-    uint32_t frames_error;
-    uint32_t timeouts;
+    llp_parser_state_t state;
+    uint8_t  escape_pending;
+    uint8_t  error_code;
 } llp_parser_t;
 
 // =============================================================================
@@ -176,25 +180,29 @@ static inline void llp_parser_init(llp_parser_t* p) {
     p->crc_received      = 0;
     p->last_byte_time    = 0;
     p->error_code        = LLP_ERR_OK;
+#if LLP_ENABLE_STATS
     p->frames_ok         = 0;
     p->frames_error      = 0;
     p->timeouts          = 0;
+#endif
     p->frame.payload_len = 0;
 }
 
 static inline int llp_parser_process_byte(llp_parser_t* p, uint8_t byte,
                                            unsigned long current_ms) {
     if (p->state != LLP_STATE_WAIT_MAGIC1) {
-        if (current_ms - p->last_byte_time > LLP_FRAME_TIMEOUT_MS) {
+        if ((uint16_t)(current_ms - p->last_byte_time) > LLP_FRAME_TIMEOUT_MS) {
             p->error_code = LLP_ERR_TIMEOUT;
+#if LLP_ENABLE_STATS
             p->timeouts++;
+#endif
             _llp_parser_reset(p);
-            p->last_byte_time = current_ms;
+            p->last_byte_time = (uint16_t)current_ms;
             if (byte == LLP_MAGIC_1) p->state = LLP_STATE_WAIT_MAGIC2;
             return -1;
         }
     }
-    p->last_byte_time = current_ms;
+    p->last_byte_time = (uint16_t)current_ms;
 
     if (p->state != LLP_STATE_WAIT_MAGIC1 &&
         p->state != LLP_STATE_WAIT_MAGIC2) {
@@ -204,7 +212,9 @@ static inline int llp_parser_process_byte(llp_parser_t* p, uint8_t byte,
 
             if (byte == LLP_MAGIC_2) {
                 p->error_code = LLP_ERR_SYNC;
+#if LLP_ENABLE_STATS
                 p->frames_error++;
+#endif
 
                 p->crc_calculated = 0xFFFF;
                 p->crc_calculated = llp_crc16_update(p->crc_calculated, LLP_MAGIC_1);
@@ -218,7 +228,9 @@ static inline int llp_parser_process_byte(llp_parser_t* p, uint8_t byte,
 
             } else {
                 p->error_code = LLP_ERR_SYNC;
+#if LLP_ENABLE_STATS
                 p->frames_error++;
+#endif
                 _llp_parser_reset(p);
                 return -1;
             }
@@ -262,7 +274,9 @@ static inline int llp_parser_process_byte(llp_parser_t* p, uint8_t byte,
 
             if (p->frame.payload_len > LLP_MAX_PAYLOAD) {
                 p->error_code = LLP_ERR_PAYLOAD_LEN;
+#if LLP_ENABLE_STATS
                 p->frames_error++;
+#endif
                 _llp_parser_reset(p);
                 return -1;
             }
@@ -291,13 +305,16 @@ static inline int llp_parser_process_byte(llp_parser_t* p, uint8_t byte,
 
             if (p->crc_received != p->crc_calculated) {
                 p->error_code = LLP_ERR_CHECKSUM;
+#if LLP_ENABLE_STATS
                 p->frames_error++;
+#endif
                 _llp_parser_reset(p);
                 return -1;
             }
 
-            p->frame.crc = p->crc_calculated;
+#if LLP_ENABLE_STATS
             p->frames_ok++;
+#endif
             _llp_parser_reset(p);
             return 1;
 
@@ -367,8 +384,8 @@ static inline int llp_find_layer(const llp_frame_t* frame, uint8_t target_id,
     return 0;
 }
 
-static inline int llp_get_final_payload(const llp_frame_t* frame,
-                                         uint8_t* out_buf, uint16_t out_buf_size) {
+static inline const uint8_t* llp_get_final_payload_ptr(const llp_frame_t* frame,
+                                                         uint16_t* out_len) {
     const uint8_t* buf   = frame->payload;
     const uint16_t total = frame->payload_len;
     uint16_t pos = 0;
@@ -377,24 +394,32 @@ static inline int llp_get_final_payload(const llp_frame_t* frame,
         uint8_t layer_id = buf[pos++];
 
         if (LLP_LAYER_IS_FINAL(layer_id)) {
-            uint16_t raw_len = total - pos;
-            if (raw_len > out_buf_size) return -1;
-            if (raw_len > 0) memcpy(out_buf, &buf[pos], raw_len);
-            return (int)raw_len;
+            *out_len = total - pos;
+            return &buf[pos];
         }
 
         uint16_t meta_len  = 0;
         uint8_t  len_bytes = _llp_read_meta_len(buf, total, pos, &meta_len);
-        if (len_bytes == 0)           return -1;
+        if (len_bytes == 0)           return NULL;
         pos += len_bytes;
-        if (pos + meta_len > total)   return -1;
+        if (pos + meta_len > total)   return NULL;
 
-        if (LLP_LAYER_IS_TRANSFORM(layer_id)) return -1;
+        if (LLP_LAYER_IS_TRANSFORM(layer_id)) return NULL;
 
         pos += meta_len;
     }
 
-    return -1;
+    return NULL;
+}
+
+static inline int llp_get_final_payload(const llp_frame_t* frame,
+                                         uint8_t* out_buf, uint16_t out_buf_size) {
+    uint16_t raw_len;
+    const uint8_t* ptr = llp_get_final_payload_ptr(frame, &raw_len);
+    if (!ptr) return -1;
+    if (raw_len > out_buf_size) return -1;
+    if (raw_len > 0) memcpy(out_buf, ptr, raw_len);
+    return (int)raw_len;
 }
 
 // =============================================================================
@@ -456,10 +481,11 @@ static inline size_t llp_build_frame(uint8_t* out_buf, size_t out_buf_size,
 // STATISTICS
 // =============================================================================
 
+#if LLP_ENABLE_STATS
 static inline void llp_get_stats(const llp_parser_t* p,
-                                   uint32_t* frames_ok,
-                                   uint32_t* frames_error,
-                                   uint32_t* timeouts) {
+                                    uint32_t* frames_ok,
+                                    uint32_t* frames_error,
+                                    uint32_t* timeouts) {
     if (frames_ok)    *frames_ok    = p->frames_ok;
     if (frames_error) *frames_error = p->frames_error;
     if (timeouts)     *timeouts     = p->timeouts;
@@ -470,5 +496,6 @@ static inline void llp_reset_stats(llp_parser_t* p) {
     p->frames_error = 0;
     p->timeouts     = 0;
 }
+#endif /* LLP_ENABLE_STATS */
 
 #endif /* LLP_PROTOCOL_H */
