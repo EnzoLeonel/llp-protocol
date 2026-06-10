@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Timeout detection now uses correct `uint16_t` modular arithmetic for `last_byte_time`
 
+### Added
+- Hardware test suite: `test/hardware_test/` with Arduino sketch and Python test runner (30 tests)
+
 ## [3.0.0] - 2026-05-17
 
 ### Changed
